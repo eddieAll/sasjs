@@ -698,7 +698,7 @@ export default class SASjs {
       ? this.sasjsConfig.serverUrl + form.getAttribute("action")
       : null;
 
-    let inputs: any = form?.querySelectorAll("input");
+    let inputs: any = form!.querySelectorAll("input");
 
     for (let input of inputs) {
       if (input.name === "user_oauth_approval") {
@@ -731,6 +731,84 @@ export default class SASjs {
       } else {
         reject("Auth form url is null");
       }
+    });
+  }
+
+  public getAuthCode(client_id: string) {
+    return new Promise((resolve, reject) => {
+      let authUrl = this.sasjsConfig.serverUrl + `/SASLogon/oauth/authorize?client_id=${client_id}&response_type=code`;
+    
+      fetch(authUrl, {
+        referrerPolicy: 'same-origin',
+        credentials: 'include'
+      })
+      .then(response => response.text())
+      .then(response => {
+        let authcode: string = "";
+        let responseBody = response.split("<body>")[1].split("</body>")[0];
+        let bodyElement: any = document.createElement("div");
+        bodyElement.innerHTML = responseBody;
+
+        if (bodyElement) {
+          authcode = bodyElement.querySelector('.infobox h4').innerText;
+        }
+
+        localStorage.setItem('auth_code', authcode);
+        resolve(authcode);
+      });
+    });
+  }
+
+  public getAccessToken(client_id: string, client_secret: string, auth_code: string) {
+    return new Promise((resolve, reject) => {
+      let url = this.sasjsConfig.serverUrl + '/SASLogon/oauth/token';
+      let headers = {
+        'Authorization': 'Basic ' + btoa(client_id + ":" + client_secret)
+      }
+  
+      let formData = new FormData();
+      formData.append('grant_type', 'authorization_code');
+      formData.append('code', auth_code);
+  
+      fetch(url, {
+        method: 'POST',
+        credentials: "include",
+        headers: headers,
+        body: formData,
+        referrerPolicy: "same-origin"
+      })
+      .then(res => res.text())
+      .then(res => {
+        localStorage.setItem('client_id', client_id);
+        localStorage.setItem('client_secret', client_secret);
+        localStorage.setItem('auth_data', res);
+        resolve(JSON.parse(res));
+      });
+    });
+  }
+
+  public deleteClient(client_id: string) {
+    return new Promise((resolve, reject) => {
+      let access_token = "";
+      let auth_data: any = localStorage.getItem('auth_data') || "";
+      auth_data = JSON.parse(auth_data);
+      access_token = auth_data.access_token;
+
+      let url = this.sasjsConfig.serverUrl + `/oauth/clients/${client_id}`;
+
+      let headers = {
+        'Authorization': access_token
+      }
+
+      fetch(url, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: headers
+      })
+      .then(res => res.text())
+      .then(res => {
+        resolve(res);
+      })
     });
   }
 
